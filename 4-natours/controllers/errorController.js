@@ -25,32 +25,57 @@ const handleValidationErrorDB = err => {
   return new AppError(message, 400);
 };
 
-const sendErrorDev = (err, res) => {
-  res.status(err.statusCode).json({
-    status: err.status,
-    error: err,
-    message: err.message,
-    stack: err.stack
-  });
-};
-
-const sendErrorProd = (err, res) => {
-  // Operational, trusted error: send message to client
-  if (err.isOperational) {
+const sendErrorDev = (err, req, res) => {
+  if (req.originalUrl.startsWith("/api")) {
     res.status(err.statusCode).json({
       status: err.status,
-      message: err.message
+      error: err,
+      message: err.message,
+      stack: err.stack
     });
-
-    // Programming or other unknown error: don't leak error details
   } else {
-    // 1) Log error
-    console.error("ERROR 💥", err);
-    // 2) Send generic message
-    res.status(500).json({
-      status: "error",
-      message: "Something went very wrong!"
+    res.status(err.statusCode).render("error", {
+      title: "Something went wrong",
+      msg: err.message
     });
+  }
+};
+
+const sendErrorProd = (err, req, res) => {
+  if (req.originalUrl.startsWith("/api")) {
+    // Operational, trusted error: send message to client
+    if (err.isOperational) {
+      res.status(err.statusCode).json({
+        status: err.status,
+        message: err.message
+      });
+
+      // Programming or other unknown error: don't leak error details
+    } else {
+      // 1) Log error
+      console.error("ERROR 💥", err);
+      // 2) Send generic message
+      res.status(500).json({
+        status: "error",
+        message: "Something went very wrong!"
+      });
+    }
+  } else {
+    // Operational, trusted error: send message to client
+    if (err.isOperational) {
+      res.status(err.statusCode).render("error", {
+        title: "Something went wrong",
+        msg: err.message
+      });
+    } else {
+      // 1) Log error
+      console.error("ERROR 💥", err);
+      // 2) Send generic message
+      res.status(err.statusCode).render("error", {
+        title: "Something went wrong",
+        msg: "Please try again later"
+      });
+    }
   }
 };
 
@@ -61,9 +86,10 @@ module.exports = (err, req, res, next) => {
   err.status = err.status || "error";
 
   if (process.env.NODE_ENV === "development") {
-    sendErrorDev(err, res);
+    sendErrorDev(err, req, res);
   } else if (process.env.NODE_ENV === "production") {
     let error = { ...err };
+    error.message = err.message;
 
     if (error.name === "CastError") error = handleCastErrorDB(error);
     if (error.code === 11000) error = handleDuplicateFieldsDB(error);
@@ -72,6 +98,6 @@ module.exports = (err, req, res, next) => {
     if (error.name === "JsonWebTokenError") error = handleJWTError(error);
     if (error.name === "TokenExpiredError")
       error = handleJWTExpiredError(error);
-    sendErrorProd(error, res);
+    sendErrorProd(error, req, res);
   }
 };
