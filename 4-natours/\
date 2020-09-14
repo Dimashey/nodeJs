@@ -1,0 +1,4 @@
+NODE_ENV=development
+PORT=3000
+DATABASE=mongodb+srv://dmytro:<PASSWORD>@cluster0-wksh8.mongodb.net/natours?retryWrites=true&w=majority
+DATABASE_PASSWORD=UyhU2hJqibOwKZFx
